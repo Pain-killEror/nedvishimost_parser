@@ -54,7 +54,7 @@ PHOTOS = {
     },
     "ГАРАЖ": {
         "Кирпичный": ["https://images.unsplash.com/photo-1595079676339-1534801ad6cf", "https://images.unsplash.com/photo-1532323544230-7191fd51bc1b"],
-        "Паркинг": ["https://images.unsplash.com/photo-1506521781263-d8422e82f27a", "https://images.unsplash.com/photo-1573348722427-f1d6819fdf98"]
+        "Металлический": ["https://images.unsplash.com/photo-1506521781263-d8422e82f27a", "https://images.unsplash.com/photo-1573348722427-f1d6819fdf98"] 
     }
 }
 
@@ -207,25 +207,49 @@ def run_smart_generator(count=300):
             area_total = round(random.uniform(5, 50), 1) # Храним сотки в area_total
             
             extra_attributes["land_purpose"] = random.choice(["ИЖС", "Промназначение", "Коммерция"])
+            # Новые атрибуты
+            extra_attributes["has_electricity"] = random.choice([True, False])
+            extra_attributes["has_gas"] = random.choice([True, False])
             
             photo_set = PHOTOS[cat]["Стандарт"]
             title = f"Участок {area_total} сот."
-            desc = f"Продается земельный участок. Назначение: {extra_attributes['land_purpose']}."
+            
+            # Добавили информацию о коммуникациях в описание
+            electricity_str = "Есть" if extra_attributes["has_electricity"] else "Нет"
+            gas_str = "Есть" if extra_attributes["has_gas"] else "Нет"
+            desc = f"Продается земельный участок. Назначение: {extra_attributes['land_purpose']}. Электричество: {electricity_str}, Газ: {gas_str}."
 
         elif cat == "ГАРАЖ":
             address, loc_coeff = get_location(["RESIDENTIAL", "INDUSTRIAL"])
-            garage_prices = {"Кирпичный": 6000, "Паркинг": 12000}
-            g_type = random.choice(list(garage_prices.keys()))
             
+            # 2. Материал: кирпичный или металлический
+            material = random.choice(["Кирпичный", "Металлический"])
+            wall_material = material  # Записываем и в стандартную колонку таблицы
+            
+            # Формируем базовую цену в зависимости от материала
+            if material == "Кирпичный":
+                base_price = 6000
+            else:
+                base_price = 2500
+                
             area_total = round(random.uniform(14, 25), 1)
-            price_total = int(garage_prices[g_type] * loc_coeff) 
+            price_total = int(base_price * loc_coeff) 
             
-            extra_attributes["garage_type"] = g_type
-            extra_attributes["has_security"] = True
+            # Заполняем нужные вам атрибуты
+            extra_attributes["is_covered"] = random.choice([True, False]) # 1. Крытый
+            extra_attributes["material"] = material                       # 2. Материал
+            extra_attributes["has_pit"] = random.choice([True, False])    # 3. Яма
             
-            photo_set = PHOTOS[cat][g_type]
-            title = f"Гараж/Место ({g_type}), {area_total} м²"
-            desc = f"Тип: {g_type}. Круглосуточная охрана и видеонаблюдение."
+            # Получаем фото (с защитой от ошибки, если забыли добавить фото для металла)
+            photo_set = PHOTOS[cat].get(material, PHOTOS[cat]["Кирпичный"])
+            
+            title = f"Гараж ({material.lower()}), {area_total} м²"
+            
+            # Переводим булевые значения в текст для описания
+            covered_str = "Да" if extra_attributes["is_covered"] else "Нет"
+            pit_str = "Есть" if extra_attributes["has_pit"] else "Нет"
+            
+            desc = f"Продается {material.lower()} гараж. Крытый: {covered_str}. Смотровая яма: {pit_str}."
 
         # ================= МАТЕМАТИКА ЦЕНЫ =================
         if cat != "ГАРАЖ":

@@ -2,6 +2,7 @@ import pymysql
 import uuid
 import random
 import json
+import os # Добавили для работы с файлами и папками
 
 # ================= НАСТРОЙКИ БД =================
 DB_CONFIG = {
@@ -14,49 +15,54 @@ DB_CONFIG = {
 
 # ================= СПРАВОЧНИКИ (УМНАЯ ЛОГИКА) =================
 
-# 1. Зоны и улицы (Коэффициент цены, Список улиц)
+# 1. Зоны и улицы
 ZONES = {
     "CENTER": (1.4, ["Карла Маркса", "Независимости", "Победителей", "Ленина", "Комсомольская", "Немига", "Интернациональная"]),
     "RESIDENTIAL": (1.0, ["Притыцкого", "Дзержинского", "Лобанка", "Есенина", "Маяковского", "Якуба Коласа", "Плеханова"]),
     "INDUSTRIAL": (0.7, ["Шабаны", "Селицкого", "Бабушкина", "Колядичи", "Инженерная", "Промышленная", "Машиностроителей"])
 }
 
-# 2. Наборы фотографий под каждое состояние объекта
-PHOTOS = {
-    "КВАРТИРА": {
-        "Черновая отделка": ["https://images.unsplash.com/photo-1503387762-592deb58ef4e", "https://images.unsplash.com/photo-1590381105924-c72589b9ef3f"],
-        "Предчистовая": ["https://images.unsplash.com/photo-1588854337236-6889d631faa8", "https://images.unsplash.com/photo-1513694203232-719a280e022f"],
-        "Плохой ремонт": ["https://images.unsplash.com/photo-1558036117-15d82a90b9b1", "https://images.unsplash.com/photo-1497366754035-f200968a6e72"],
-        "Средний ремонт": ["https://images.unsplash.com/photo-1522708323590-d24dbb6b0267", "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688"],
-        "Хороший ремонт": ["https://images.unsplash.com/photo-1560448204-e02f11c3d0e2", "https://images.unsplash.com/photo-1484154218962-a197022b5858"],
-        "Элитный ремонт": ["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9", "https://images.unsplash.com/photo-1600607687920-4e2a09cf159d"]
-    },
-    "ДОМ": {
-        "Коттедж": ["https://images.unsplash.com/photo-1518780664697-55e3ad937233", "https://images.unsplash.com/photo-1600585154340-be6161a56a0c"],
-        "Старый дом": ["https://images.unsplash.com/photo-1564013799919-ab600027ffc6", "https://images.unsplash.com/photo-1510627498534-cf7e9002facc"],
-        "Таунхаус": ["https://images.unsplash.com/photo-1572120360610-d971b9d7767c", "https://images.unsplash.com/photo-1580587771525-78b9dba3b914"]
-    },
-    "ОФИС": {
-        "A": ["https://images.unsplash.com/photo-1497366216548-37526070297c", "https://images.unsplash.com/photo-1497215728101-856f4ea42174"],
-        "B": ["https://images.unsplash.com/photo-1504384308090-c894fdcc538d", "https://images.unsplash.com/photo-1527192491265-7e15c55b1ed2"],
-        "C": ["https://images.unsplash.com/photo-1524861118128-4ce68fdfb6e8", "https://images.unsplash.com/photo-1536629930730-86317bc222ea"]
-    },
-    "СКЛАД": {
-        "Отапливаемый": ["https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d", "https://images.unsplash.com/photo-1553413077-190dd305871c"],
-        "Холодный": ["https://images.unsplash.com/photo-1601584115197-04ecc0da31d7", "https://images.unsplash.com/photo-1505731422754-0498b31a31b2"]
-    },
-    "КОММЕРЦИЯ": {
-        "Стрит-ритейл": ["https://images.unsplash.com/photo-1555529669-e69e7aa0ba9a", "https://images.unsplash.com/photo-1534438327276-14e5300c3a48"],
-        "ТЦ": ["https://images.unsplash.com/photo-1519567281799-974249a888c3", "https://images.unsplash.com/photo-1567449303078-57ad995bd3d6"]
-    },
-    "УЧАСТОК": {
-        "Стандарт": ["https://images.unsplash.com/photo-1500382017468-9049fed747ef", "https://images.unsplash.com/photo-1473496169904-658ba7c44d8a"]
-    },
-    "ГАРАЖ": {
-        "Кирпичный": ["https://images.unsplash.com/photo-1595079676339-1534801ad6cf", "https://images.unsplash.com/photo-1532323544230-7191fd51bc1b"],
-        "Металлический": ["https://images.unsplash.com/photo-1506521781263-d8422e82f27a", "https://images.unsplash.com/photo-1573348722427-f1d6819fdf98"] 
+# 2. Динамическая загрузка фотографий из папок
+def load_photos(base_dir="photos"):
+    loaded_photos = {}
+    
+    # Сопоставляем названия папок с ключами категорий, которые используются в коде
+    folder_mapping = {
+        "квартиры": "КВАРТИРА",
+        "дом": "ДОМ",
+        "офис": "ОФИС",
+        "склад": "СКЛАД",
+        "коммерция": "КОММЕРЦИЯ",
+        "участок": "УЧАСТОК",
+        "гараж": "ГАРАЖ"
     }
-}
+
+    if not os.path.exists(base_dir):
+        print(f"⚠️ Папка {base_dir} не найдена. Создай её и добавь файлы.")
+        return loaded_photos
+
+    for folder_name, cat_key in folder_mapping.items():
+        folder_path = os.path.join(base_dir, folder_name)
+        loaded_photos[cat_key] = {}
+        
+        if os.path.exists(folder_path):
+            for filename in os.listdir(folder_path):
+                if filename.endswith(".txt"):
+                    # Убираем ".txt" чтобы получить состояние (например, "Черновая отделка")
+                    state_name = filename[:-4] 
+                    file_path = os.path.join(folder_path, filename)
+                    
+                    with open(file_path, "r", encoding="utf-8") as file:
+                        # Читаем строки, убираем пробелы и пустые строки
+                        urls = [line.strip() for line in file if line.strip()]
+                        loaded_photos[cat_key][state_name] = urls
+        else:
+            print(f"⚠️ Папка {folder_path} не найдена. Категория {cat_key} может работать с ошибками.")
+
+    return loaded_photos
+
+# Загружаем фото при запуске
+PHOTOS = load_photos()
 
 def get_location(allowed_zones):
     """Выбирает улицу из разрешенных зон. ВОЗВРАЩАЕТ ТОЛЬКО УЛИЦУ И ДОМ."""
@@ -67,6 +73,11 @@ def get_location(allowed_zones):
     return address, loc_coeff
 
 def run_smart_generator(count=300):
+    # Если словарь фото пуст, прерываем работу
+    if not PHOTOS:
+        print("❌ Ошибка: Фотографии не загружены. Проверь папку photos.")
+        return
+
     conn = pymysql.connect(**DB_CONFIG)
     cursor = conn.cursor()
     print(f"🚀 Запуск генератора: {count} объектов...")
@@ -77,7 +88,7 @@ def run_smart_generator(count=300):
     for i in range(count):
         cat = random.choice(categories)
         
-        # ДЕФОЛТНЫЕ ПАРАМЕТРЫ (чтобы в БД не было NULL и ошибок)
+        # ДЕФОЛТНЫЕ ПАРАМЕТРЫ
         area_total = 0.0
         area_living = 0.0 
         floor = 0
@@ -86,8 +97,6 @@ def run_smart_generator(count=300):
         year_built = random.randint(1960, 2024)
         price_total, base_price_m2, loc_coeff, state_coeff = 0, 0, 1.0, 1.0
         desc, title = "", ""
-        
-        # СЛОВАРЬ ДЛЯ JSON КОЛОНКИ (СЮДА ИДЕТ РЕМОНТ И ПРОЧЕЕ)
         extra_attributes = {}
 
         # ================= ЛОГИКА ПО КАТЕГОРИЯМ =================
@@ -95,7 +104,6 @@ def run_smart_generator(count=300):
             base_price_m2 = 1350
             address, loc_coeff = get_location(["CENTER", "RESIDENTIAL"])
             
-            # Состояния ремонта и их влияние на цену
             renovation_types = {
                 "Черновая отделка": 0.8, "Предчистовая": 0.9, "Плохой ремонт": 0.7, 
                 "Средний ремонт": 1.0, "Хороший ремонт": 1.2, "Элитный ремонт": 1.6
@@ -110,12 +118,12 @@ def run_smart_generator(count=300):
             floor = random.randint(1, floors_total)
             wall_material = random.choice(["Панельный", "Кирпичный", "Монолитный"])
             
-            # ЗАПОЛНЯЕМ JSON АТРИБУТЫ
             extra_attributes["rooms_count"] = rooms
             extra_attributes["renovation_state"] = renovation
             extra_attributes["has_balcony"] = random.choice([True, False])
             
-            photo_set = PHOTOS[cat][renovation]
+            # Защита от отсутствующего ключа/файла
+            photo_set = PHOTOS.get(cat, {}).get(renovation, [])
             title = f"{rooms}-комн. квартира, {area_total} м²"
             desc = f"Продается {rooms}-комнатная квартира. Состояние ремонта: {renovation}. Материал стен: {wall_material}."
 
@@ -128,7 +136,6 @@ def run_smart_generator(count=300):
             state_coeff = house_types[h_type]
             
             area_total = round(random.uniform(60, 300), 1)
-            # ТЕПЕРЬ ЖИЛАЯ ПЛОЩАДЬ СЧИТАЕТСЯ КОРРЕКТНО
             area_living = round(area_total * random.uniform(0.6, 0.8), 1)
             plot_area = round(random.uniform(4, 15), 1)
             floors_total = random.randint(1, 3)
@@ -138,7 +145,7 @@ def run_smart_generator(count=300):
             extra_attributes["plot_area_acres"] = plot_area
             extra_attributes["heating_type"] = random.choice(["Газ", "Твердотопливный", "Электрическое"])
             
-            photo_set = PHOTOS[cat][h_type]
+            photo_set = PHOTOS.get(cat, {}).get(h_type, [])
             title = f"{h_type}, {area_total} м²"
             desc = f"В продаже {h_type.lower()} на участке {plot_area} соток. Отопление: {extra_attributes['heating_type']}."
 
@@ -157,7 +164,7 @@ def run_smart_generator(count=300):
             extra_attributes["business_center_class"] = o_class
             extra_attributes["access_24_7"] = random.choice([True, False])
             
-            photo_set = PHOTOS[cat][o_class]
+            photo_set = PHOTOS.get(cat, {}).get(o_class, [])
             title = f"Офис {area_total} м² (Класс {o_class})"
             desc = f"Офисное помещение класса {o_class}. Доступ 24/7: {'Да' if extra_attributes['access_24_7'] else 'Нет'}."
 
@@ -178,7 +185,7 @@ def run_smart_generator(count=300):
             extra_attributes["ceiling_height_m"] = ceiling_h
             extra_attributes["has_ramp"] = random.choice([True, False])
             
-            photo_set = PHOTOS[cat][w_type]
+            photo_set = PHOTOS.get(cat, {}).get(w_type, [])
             title = f"Склад ({w_type.lower()}), {area_total} м²"
             desc = f"Отличный склад. Потолки {ceiling_h}м. Рампа: {'Есть' if extra_attributes['has_ramp'] else 'Нет'}."
 
@@ -197,36 +204,31 @@ def run_smart_generator(count=300):
             extra_attributes["retail_type"] = c_type
             extra_attributes["power_kw"] = random.choice([15, 30, 50, 100])
             
-            photo_set = PHOTOS[cat][c_type]
+            photo_set = PHOTOS.get(cat, {}).get(c_type, [])
             title = f"Коммерческое помещение, {area_total} м²"
             desc = f"Формат: {c_type}. Выделенная мощность: {extra_attributes['power_kw']} кВт. Высокий пешеходный трафик."
 
         elif cat == "УЧАСТОК":
-            base_price_m2 = 5000 # Цена за сотку
+            base_price_m2 = 5000
             address, loc_coeff = get_location(["RESIDENTIAL", "INDUSTRIAL"])
-            area_total = round(random.uniform(5, 50), 1) # Храним сотки в area_total
+            area_total = round(random.uniform(5, 50), 1)
             
             extra_attributes["land_purpose"] = random.choice(["ИЖС", "Промназначение", "Коммерция"])
-            # Новые атрибуты
             extra_attributes["has_electricity"] = random.choice([True, False])
             extra_attributes["has_gas"] = random.choice([True, False])
             
-            photo_set = PHOTOS[cat]["Стандарт"]
+            photo_set = PHOTOS.get(cat, {}).get("Стандарт", [])
             title = f"Участок {area_total} сот."
             
-            # Добавили информацию о коммуникациях в описание
             electricity_str = "Есть" if extra_attributes["has_electricity"] else "Нет"
             gas_str = "Есть" if extra_attributes["has_gas"] else "Нет"
             desc = f"Продается земельный участок. Назначение: {extra_attributes['land_purpose']}. Электричество: {electricity_str}, Газ: {gas_str}."
 
         elif cat == "ГАРАЖ":
             address, loc_coeff = get_location(["RESIDENTIAL", "INDUSTRIAL"])
-            
-            # 2. Материал: кирпичный или металлический
             material = random.choice(["Кирпичный", "Металлический"])
-            wall_material = material  # Записываем и в стандартную колонку таблицы
+            wall_material = material
             
-            # Формируем базовую цену в зависимости от материала
             if material == "Кирпичный":
                 base_price = 6000
             else:
@@ -235,20 +237,16 @@ def run_smart_generator(count=300):
             area_total = round(random.uniform(14, 25), 1)
             price_total = int(base_price * loc_coeff) 
             
-            # Заполняем нужные вам атрибуты
-            extra_attributes["is_covered"] = random.choice([True, False]) # 1. Крытый
-            extra_attributes["material"] = material                       # 2. Материал
-            extra_attributes["has_pit"] = random.choice([True, False])    # 3. Яма
+            extra_attributes["is_covered"] = random.choice([True, False])
+            extra_attributes["material"] = material
+            extra_attributes["has_pit"] = random.choice([True, False])
             
-            # Получаем фото (с защитой от ошибки, если забыли добавить фото для металла)
-            photo_set = PHOTOS[cat].get(material, PHOTOS[cat]["Кирпичный"])
+            # Забираем фото конкретного материала, если нет - берем пустой список
+            photo_set = PHOTOS.get(cat, {}).get(material, [])
             
             title = f"Гараж ({material.lower()}), {area_total} м²"
-            
-            # Переводим булевые значения в текст для описания
             covered_str = "Да" if extra_attributes["is_covered"] else "Нет"
             pit_str = "Есть" if extra_attributes["has_pit"] else "Нет"
-            
             desc = f"Продается {material.lower()} гараж. Крытый: {covered_str}. Смотровая яма: {pit_str}."
 
         # ================= МАТЕМАТИКА ЦЕНЫ =================
@@ -260,7 +258,6 @@ def run_smart_generator(count=300):
         # ================= ЗАПИСЬ В БАЗУ ДАННЫХ =================
         obj_uuid = uuid.uuid4().bytes
         
-        # ОБРАТИ ВНИМАНИЕ: latitude и longitude убраны, добавлен attributes
         query = """INSERT INTO real_estate_objects 
                    (id, external_id, type, category, title, description, city, address, 
                     area_total, area_living, floor, floors_total, 
@@ -271,13 +268,13 @@ def run_smart_generator(count=300):
         try:
             cursor.execute(query, (
                 obj_uuid, 
-                f"SEED-{cat[:3]}-{random.randint(10000,99999)}",
-                "REALTY", # Всегда REALTY, как мы обсуждали
+                f"SEED-{cat[:3]}-{uuid.uuid4().hex[:8].upper()}",
+                "REALTY",
                 cat, 
                 title, 
                 desc, 
-                "Минск", # Город отдельно
-                address, # Адрес отдельно (ул. ..., д. ...)
+                "Минск",
+                address,
                 area_total, 
                 area_living, 
                 floor, 
@@ -287,10 +284,8 @@ def run_smart_generator(count=300):
                 price_total, 
                 price_per_m2, 
                 "USD", 
-                json.dumps(photo_set), 
+                json.dumps(photo_set), # Здесь сохранятся ссылки из твоих txt файлов!
                 f"https://example.com/realty/{i}",
-                
-                # ВОТ ЗДЕСЬ ВСЕ НАШИ ДОП. ДАННЫЕ (РЕМОНТ, РАМПА И Т.Д.) ПРЕВРАЩАЮТСЯ В JSON:
                 json.dumps(extra_attributes, ensure_ascii=False) 
             ))
             success_count += 1

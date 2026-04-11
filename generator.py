@@ -95,7 +95,26 @@ def run_smart_generator(count=1000): # <--- ТЕПЕРЬ ТУТ 1000 ПО УМО
 
     conn = pymysql.connect(**DB_CONFIG)
     cursor = conn.cursor()
-    print(f"🚀 Запуск генератора: {count} объектов...")
+    
+    # -------------------------------------------------------------
+    # ПОЛУЧЕНИЕ ПОЛЬЗОВАТЕЛЯ-ВЛАДЕЛЬЦА ИЗ БД
+    # -------------------------------------------------------------
+    target_email = "nikita@gmail.com"
+    cursor.execute("SELECT id FROM users WHERE email = %s", (target_email,))
+    seller_row = cursor.fetchone()
+    
+    if not seller_row:
+        print(f"❌ ОШИБКА: Пользователь с email {target_email} не найден в базе данных!")
+        print("Сначала зайди на сайт и зарегистрируй этого пользователя.")
+        cursor.close()
+        conn.close()
+        return # Прерываем скрипт
+
+    # Получаем бинарный ID
+    seller_id = seller_row[0] if isinstance(seller_row, tuple) else seller_row['id']
+    # -------------------------------------------------------------
+    
+    print(f"🚀 Запуск генератора: {count} объектов от имени {target_email}...")
     success_count = 0
 
     categories = list(PHOTOS.keys())
@@ -233,12 +252,13 @@ def run_smart_generator(count=1000): # <--- ТЕПЕРЬ ТУТ 1000 ПО УМО
 
         # ================= ЗАПИСЬ В БАЗУ ДАННЫХ =================
         obj_uuid = uuid.uuid4().bytes
+        # Добавлено поле user_id в конце запроса
         query = """INSERT INTO real_estate_objects 
                    (id, external_id, type, category, title, description, city, address, 
                     area_total, area_living, floor, floors_total, 
                     wall_material, year_built, price_total, price_per_m2, currency, 
-                    images_urls, source_url, created_at, updated_at, attributes) 
-                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW(), %s)"""
+                    images_urls, source_url, created_at, updated_at, attributes, user_id) 
+                   VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW(), %s, %s)"""
         
         try:
             cursor.execute(query, (
@@ -249,7 +269,8 @@ def run_smart_generator(count=1000): # <--- ТЕПЕРЬ ТУТ 1000 ПО УМО
                 floor, floors_total, wall_material, year_built, price_total, 
                 price_per_m2, "USD", json.dumps(photo_set),
                 f"https://example.com/realty/{i}",
-                json.dumps(extra_attributes, ensure_ascii=False) 
+                json.dumps(extra_attributes, ensure_ascii=False),
+                seller_id # <--- Передаем ID пользователя
             ))
             success_count += 1
         except Exception as e:
